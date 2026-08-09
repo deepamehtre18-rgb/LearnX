@@ -43,8 +43,8 @@ cd LearnX
 
 ### 2. Compile the project
 
-```bash
-javac -cp "lib/" -d out src/db/.java src/model/.java src/service/.java src/util/.java src/.java
+```powershell
+javac -cp "lib/*" -d out (Get-ChildItem -Recurse src -Filter *.java).FullName
 
 ### 3. Run the application
 
