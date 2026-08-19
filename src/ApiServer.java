@@ -114,7 +114,7 @@ public class ApiServer {
 
     exchange.getResponseHeaders().set(
             "Access-Control-Allow-Origin",
-            "http://localhost:5179"
+            "http://localhost:5175"
     );
 
     exchange.getResponseHeaders().set(
@@ -474,7 +474,7 @@ public class ApiServer {
 
         exchange.getResponseHeaders().set(
                 "Access-Control-Allow-Origin",
-                "http://localhost:5179"
+                "http://localhost:5175"
         );
 
         exchange.getResponseHeaders().set(
