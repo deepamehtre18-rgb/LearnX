@@ -7,7 +7,8 @@ public class DBConnection {
 
     private static final String URL = "jdbc:mysql://localhost:3306/learnx_db";
     private static final String USERNAME = "root";
-   private static final String PASSWORD = System.getenv("MYSQL_PASSWORD");
+   private static final String PASSWORD = "YourNewPassword123!";
+   
 
     public static Connection getConnection() {
         try {

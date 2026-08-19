@@ -40,24 +40,24 @@ public class ResultDAO {
     public void viewResults(User user) {
 
         String query = "SELECT * FROM results WHERE student_id = ?";
-try{
+        try{
             Connection connection = DBConnection.getConnection();
 
             PreparedStatement ps = connection.prepareStatement(query);
             System.err.println("Logged User ID = " + user.getUserId());
-            System.err.println("Logged User Nmae = " + user.getName());
+            System.err.println("Logged user Nmae = " + user.getName());
             ps.setInt(1, user.getUserId());
 
             ResultSet rs = ps.executeQuery();
 
-           while (rs.next()) {
-    System.out.println("------------------------");
-   System.out.println("Student ID   : " + rs.getInt("student_id"));
-System.out.println("Student Name : " + rs.getString("student_name"));
-System.out.println("Quiz Title   : " + rs.getString("quiz_title"));
-System.out.println("Score        : " + rs.getInt("score"));
-System.out.println("Total Marks  : " + rs.getInt("total_marks"));
-}
+            while (rs.next()) {
+            System.out.println("------------------------");
+            System.out.println("Student ID  : " + rs.getInt("student_id"));
+            System.out.println("Student Name : " + rs.getString("student_name"));
+            System.out.println("Quiz Title   : " + rs.getString("quiz_title"));
+            System.out.println("Score        : " + rs.getInt("score"));
+            System.out.println("Total Marks  : " + rs.getInt("total_marks"));
+        }
 
         } catch (SQLException e) {
             e.printStackTrace();
@@ -66,54 +66,51 @@ System.out.println("Total Marks  : " + rs.getInt("total_marks"));
 
     public boolean updateResult(int studentId, int newScore) {
 
-    String query = "UPDATE results SET score = ? WHERE student_id = ?";
+        String query = "UPDATE results SET score = ? WHERE student_id = ?";
+        try {
+            Connection connection = DBConnection.getConnection();
 
-    try {
+            PreparedStatement ps = connection.prepareStatement(query);
 
-        Connection connection = DBConnection.getConnection();
+            ps.setInt(1, newScore);
+            ps.setInt(2, studentId);
 
-        PreparedStatement ps = connection.prepareStatement(query);
+            int rows = ps.executeUpdate();
 
-        ps.setInt(1, newScore);
-        ps.setInt(2, studentId);
+            if (rows > 0) {
+                System.out.println("Result Updated Successfully!");
+                return true;
+            }
 
-        int rows = ps.executeUpdate();
-
-        if (rows > 0) {
-            System.out.println("Result Updated Successfully!");
-            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
 
-    } catch (SQLException e) {
-        e.printStackTrace();
+        return false;
     }
 
-    return false;
-}
+    public boolean deleteResult(int studentId) {
 
+        String query = "DELETE FROM results WHERE student_id = ?";
 
-public boolean deleteResult(int studentId) {
+        try {
+            Connection connection = DBConnection.getConnection();
 
-    String query = "DELETE FROM results WHERE student_id = ?";
+            PreparedStatement ps = connection.prepareStatement(query);
 
-    try {
-        Connection connection = DBConnection.getConnection();
+            ps.setInt(1, studentId);
 
-        PreparedStatement ps = connection.prepareStatement(query);
+            int rows = ps.executeUpdate();
 
-        ps.setInt(1, studentId);
+            if (rows > 0) {
+                System.out.println("Result Deleted Successfully!");
+                return true;
+            }
 
-        int rows = ps.executeUpdate();
-
-        if (rows > 0) {
-            System.out.println("Result Deleted Successfully!");
-            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
 
-    } catch (SQLException e) {
-        e.printStackTrace();
+        return false;
     }
-
-    return false;
-}
 }

@@ -1,38 +1,185 @@
-import { useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 
 function Login() {
   const navigate = useNavigate();
 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+
+    setError("");
+
+    // Validation
+    if (!email.trim() || !password.trim()) {
+      setError("Please enter email and password.");
+      return;
+    }
+
+    if (!email.includes("@")) {
+      setError("Please enter a valid email.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    // Show loading state
+    setLoading(true);
+
+    // Store logged-in user
+    localStorage.setItem(
+      "user",
+      JSON.stringify({
+        email: email.trim(),
+      })
+    );
+
+    // Small delay for better interaction
+    setTimeout(() => {
+      navigate("/dashboard");
+    }, 500);
+  };
+
   return (
-    <div>
-      <h1>LearnX</h1>
-      <p>Online Learning & Quiz Platform</p>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        background: "#f5f7fb",
+      }}
+    >
+      <div
+        style={{
+          width: "380px",
+          background: "white",
+          padding: "35px",
+          borderRadius: "12px",
+          boxShadow: "0 5px 20px rgba(0,0,0,0.1)",
+          textAlign: "center",
+        }}
+      >
+        <h1 style={{ marginBottom: "5px" }}>LearnX</h1>
 
-      <h2>Login</h2>
+        <p style={{ color: "#666", marginBottom: "25px" }}>
+          Online Learning & Quiz Platform
+        </p>
 
-      <form onSubmit={(e) => {
-        e.preventDefault();
-        navigate("/dashboard");
-      }}>
-        <input
-          type="email"
-          placeholder="Email"
-        />
+        <h2 style={{ marginBottom: "20px" }}>Login</h2>
 
-        <input
-          type="password"
-          placeholder="Password"
-        />
+        <form onSubmit={handleLogin}>
+          {/* Email */}
+          <input
+            type="email"
+            placeholder="Enter email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError("");
+            }}
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginBottom: "15px",
+              border: "1px solid #ccc",
+              borderRadius: "6px",
+              boxSizing: "border-box",
+            }}
+          />
 
-        <button type="submit">
-          Login
-        </button>
-      </form>
+          {/* Password */}
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setError("");
+              }}
+              style={{
+                width: "100%",
+                padding: "12px",
+                paddingRight: "70px",
+                marginBottom: "15px",
+                border: "1px solid #ccc",
+                borderRadius: "6px",
+                boxSizing: "border-box",
+              }}
+            />
 
-      <p>
-        Don't have an account?{" "}
-        <a href="/register">Register</a>
-      </p>
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: "absolute",
+                right: "8px",
+                top: "6px",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                color: "#2563eb",
+              }}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <p
+              style={{
+                color: "red",
+                fontSize: "14px",
+                marginBottom: "15px",
+              }}
+            >
+              {error}
+            </p>
+          )}
+
+          {/* Login Button */}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "12px",
+              border: "none",
+              borderRadius: "6px",
+              background: loading ? "#999" : "#2563eb",
+              color: "white",
+              cursor: loading ? "not-allowed" : "pointer",
+              fontSize: "16px",
+            }}
+          >
+            {loading ? "Logging in..." : "Login"}
+          </button>
+        </form>
+
+        <p style={{ marginTop: "20px" }}>
+          Don't have an account?{" "}
+          <Link
+            to="/register"
+            style={{
+              color: "#2563eb",
+              textDecoration: "none",
+              fontWeight: "bold",
+            }}
+          >
+            Register
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }
