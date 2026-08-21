@@ -5,17 +5,21 @@ import java.sql.DriverManager;
 
 public class DBConnection {
 
-    private static final String URL = "jdbc:mysql://localhost:3306/learnx_db";
-    private static final String USERNAME = "root";
-   private static final String PASSWORD = "YourNewPassword123!";
-   
+    private static final String URL = System.getenv("DB_URL");
+    private static final String USERNAME = System.getenv("DB_USERNAME");
+    private static final String PASSWORD = System.getenv("DB_PASSWORD");
 
     public static Connection getConnection() {
+
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
 
             Connection connection =
-                    DriverManager.getConnection(URL, USERNAME, PASSWORD);
+                    DriverManager.getConnection(
+                            URL,
+                            USERNAME,
+                            PASSWORD
+                    );
 
             System.out.println("Database Connected Successfully!");
             System.out.println("Database = " + connection.getCatalog());
@@ -23,8 +27,10 @@ public class DBConnection {
             return connection;
 
         } catch (Exception e) {
+
             System.out.println("Database Connection Failed!");
             e.printStackTrace();
+
             return null;
         }
     }
