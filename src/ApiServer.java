@@ -13,10 +13,19 @@ public class ApiServer {
 
     public static void main(String[] args) throws Exception {
 
-        HttpServer server = HttpServer.create(
-                new InetSocketAddress(8080), 0
+        // Render provides the PORT environment variable
+        int port = Integer.parseInt(
+                System.getenv().getOrDefault("PORT", "8080")
         );
 
+        HttpServer server = HttpServer.create(
+                new InetSocketAddress(port), 0
+        );
+
+        // Root endpoint
+        server.createContext("/", ApiServer::home);
+
+        // API endpoints
         server.createContext("/api/courses", ApiServer::getCourses);
         server.createContext("/api/questions", ApiServer::getQuestions);
         server.createContext("/api/videos", ApiServer::getVideos);
@@ -25,13 +34,45 @@ public class ApiServer {
 
         System.out.println("=================================");
         System.out.println("LearnX API Server Started");
-        System.out.println("http://localhost:8080");
+        System.out.println("Running on port: " + port);
         System.out.println("=================================");
     }
 
+
+    // =========================================================
+    // HOME / HEALTH CHECK
+    // URL: http://localhost:8080/
+    // =========================================================
+
+    private static void home(HttpExchange exchange)
+            throws IOException {
+
+        addCorsHeaders(exchange);
+
+        if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
+            exchange.sendResponseHeaders(204, -1);
+            return;
+        }
+
+        if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
+            sendResponse(
+                    exchange,
+                    405,
+                    "{\"error\":\"Method not allowed\"}"
+            );
+            return;
+        }
+
+        String response =
+                "{\"message\":\"LearnX API Server is running\"}";
+
+        sendResponse(exchange, 200, response);
+    }
+
+
     // =========================================================
     // GET COURSES
-    // URL: http://localhost:8080/api/courses
+    // URL: /api/courses
     // =========================================================
 
     private static void getCourses(HttpExchange exchange)
@@ -110,165 +151,152 @@ public class ApiServer {
         }
     }
 
-    private static void getVideos(HttpExchange exchange) throws IOException {
 
-    exchange.getResponseHeaders().set(
-            "Access-Control-Allow-Origin",
-            "http://localhost:5175"
-    );
+    // =========================================================
+    // GET VIDEOS BY COURSE
+    // URL: /api/videos/1
+    // =========================================================
 
-    exchange.getResponseHeaders().set(
-            "Access-Control-Allow-Methods",
-            "GET, OPTIONS"
-    );
+    private static void getVideos(HttpExchange exchange)
+            throws IOException {
 
-    exchange.getResponseHeaders().set(
-            "Access-Control-Allow-Headers",
-            "Content-Type"
-    );
+        addCorsHeaders(exchange);
 
-    exchange.getResponseHeaders().set(
-            "Content-Type",
-            "application/json"
-    );
-
-    if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
-        exchange.sendResponseHeaders(204, -1);
-        return;
-    }
-
-    if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
-        exchange.sendResponseHeaders(405, -1);
-        return;
-    }
-
-    String path = exchange.getRequestURI().getPath();
-
-    // Example:
-    // /api/videos/1
-
-    String[] parts = path.split("/");
-
-    if (parts.length < 4) {
-
-        String error = "{\"error\":\"Course ID is required\"}";
-        byte[] response = error.getBytes();
-
-        exchange.sendResponseHeaders(400, response.length);
-
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(response);
+        if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
+            exchange.sendResponseHeaders(204, -1);
+            return;
         }
 
-        return;
-    }
-
-    int courseId;
-
-    try {
-        courseId = Integer.parseInt(parts[3]);
-
-    } catch (NumberFormatException e) {
-
-        String error = "{\"error\":\"Invalid course ID\"}";
-        byte[] response = error.getBytes();
-
-        exchange.sendResponseHeaders(400, response.length);
-
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(response);
+        if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
+            sendResponse(
+                    exchange,
+                    405,
+                    "{\"error\":\"Method not allowed\"}"
+            );
+            return;
         }
 
-        return;
-    }
+        String path = exchange.getRequestURI().getPath();
 
-    String query = """
-        SELECT video_id,
-               course_id,
-               video_title,
-               video_url
-        FROM videos
-        WHERE course_id = ?
-        """;
+        String[] parts = path.split("/");
 
-    StringBuilder json = new StringBuilder("[");
-    boolean first = true;
+        if (parts.length < 4) {
 
-    try (
-        Connection connection = DBConnection.getConnection();
-        PreparedStatement ps = connection.prepareStatement(query)
-    ) {
+            sendResponse(
+                    exchange,
+                    400,
+                    "{\"error\":\"Course ID is required\"}"
+            );
 
-        ps.setInt(1, courseId);
+            return;
+        }
 
-        try (ResultSet rs = ps.executeQuery()) {
+        int courseId;
 
-            while (rs.next()) {
+        try {
 
-                if (!first) {
-                    json.append(",");
+            courseId = Integer.parseInt(parts[3]);
+
+        } catch (NumberFormatException e) {
+
+            sendResponse(
+                    exchange,
+                    400,
+                    "{\"error\":\"Invalid course ID\"}"
+            );
+
+            return;
+        }
+
+        String query = """
+                SELECT video_id,
+                       course_id,
+                       video_title,
+                       video_url
+                FROM videos
+                WHERE course_id = ?
+                """;
+
+        StringBuilder json = new StringBuilder("[");
+        boolean first = true;
+
+        try (
+                Connection connection = DBConnection.getConnection();
+                PreparedStatement ps =
+                        connection.prepareStatement(query)
+        ) {
+
+            ps.setInt(1, courseId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+
+                while (rs.next()) {
+
+                    if (!first) {
+                        json.append(",");
+                    }
+
+                    json.append("{")
+
+                            .append("\"id\":")
+                            .append(rs.getInt("video_id"))
+                            .append(",")
+
+                            .append("\"courseId\":")
+                            .append(rs.getInt("course_id"))
+                            .append(",")
+
+                            .append("\"title\":\"")
+                            .append(
+                                    escape(
+                                            rs.getString("video_title")
+                                    )
+                            )
+                            .append("\",")
+
+                            .append("\"url\":\"")
+                            .append(
+                                    escape(
+                                            rs.getString("video_url")
+                                    )
+                            )
+                            .append("\"")
+
+                            .append("}");
+
+                    first = false;
                 }
-
-                json.append("{")
-
-                    .append("\"id\":")
-                    .append(rs.getInt("video_id"))
-                    .append(",")
-
-                    .append("\"courseId\":")
-                    .append(rs.getInt("course_id"))
-                    .append(",")
-
-                    .append("\"title\":\"")
-                    .append(escape(rs.getString("video_title")))
-                    .append("\",")
-
-                    .append("\"url\":\"")
-                    .append(escape(rs.getString("video_url")))
-                    .append("\"")
-
-                    .append("}");
-
-                first = false;
             }
-        }
 
-        json.append("]");
+            json.append("]");
 
-        byte[] response = json.toString().getBytes();
+            sendResponse(
+                    exchange,
+                    200,
+                    json.toString()
+            );
 
-        exchange.sendResponseHeaders(200, response.length);
+        } catch (Exception e) {
 
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(response);
-        }
+            e.printStackTrace();
 
-    } catch (Exception e) {
+            String error =
+                    "{\"error\":\"" +
+                    escape(e.getMessage()) +
+                    "\"}";
 
-        e.printStackTrace();
-
-        String error = "{\"error\":\""
-                + escape(e.getMessage())
-                + "\"}";
-
-        byte[] response = error.getBytes();
-
-        exchange.sendResponseHeaders(500, response.length);
-
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(response);
+            sendResponse(
+                    exchange,
+                    500,
+                    error
+            );
         }
     }
-}
+
+
     // =========================================================
     // GET QUESTIONS BY COURSE
-    //
-    // URL:
-    // http://localhost:8080/api/questions/1
-    //
-    // Example:
-    // course_id = 1 -> Java questions
-    // course_id = 2 -> SQL questions
+    // URL: /api/questions/1
     // =========================================================
 
     private static void getQuestions(HttpExchange exchange)
@@ -282,15 +310,17 @@ public class ApiServer {
         }
 
         if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
-            sendResponse(exchange, 405,
-                    "{\"error\":\"Method not allowed\"}");
+
+            sendResponse(
+                    exchange,
+                    405,
+                    "{\"error\":\"Method not allowed\"}"
+            );
+
             return;
         }
 
         String path = exchange.getRequestURI().getPath();
-
-        // Example:
-        // /api/questions/1
 
         String[] parts = path.split("/");
 
@@ -339,10 +369,8 @@ public class ApiServer {
                 WHERE course_id = ?
                 """;
 
-
         StringBuilder json = new StringBuilder("[");
         boolean first = true;
-
 
         try (
                 Connection connection =
@@ -354,7 +382,6 @@ public class ApiServer {
 
             ps.setInt(1, courseId);
 
-
             try (ResultSet rs = ps.executeQuery()) {
 
                 while (rs.next()) {
@@ -363,16 +390,12 @@ public class ApiServer {
                         json.append(",");
                     }
 
-
                     json.append("{")
 
-                            // Question ID
                             .append("\"id\":")
                             .append(rs.getInt("question_id"))
                             .append(",")
 
-
-                            // Question
                             .append("\"question\":\"")
                             .append(
                                     escape(
@@ -381,8 +404,6 @@ public class ApiServer {
                             )
                             .append("\",")
 
-
-                            // Options
                             .append("\"options\":[")
 
                             .append("\"")
@@ -419,8 +440,6 @@ public class ApiServer {
 
                             .append("],")
 
-
-                            // Correct Answer
                             .append("\"answer\":\"")
                             .append(
                                     escape(
@@ -429,13 +448,11 @@ public class ApiServer {
                             )
                             .append("\"")
 
-
                             .append("}");
 
                     first = false;
                 }
             }
-
 
             json.append("]");
 
@@ -444,7 +461,6 @@ public class ApiServer {
                     200,
                     json.toString()
             );
-
 
         } catch (Exception e) {
 
@@ -472,9 +488,10 @@ public class ApiServer {
             HttpExchange exchange
     ) {
 
+        // Allow deployed frontend + local frontend
         exchange.getResponseHeaders().set(
                 "Access-Control-Allow-Origin",
-                "http://localhost:5175"
+                "*"
         );
 
         exchange.getResponseHeaders().set(
