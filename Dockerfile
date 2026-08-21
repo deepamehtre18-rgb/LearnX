@@ -5,7 +5,7 @@ WORKDIR /app
 COPY src ./src
 COPY lib ./lib
 
-RUN javac -cp "lib/" -d out $(find src -name ".java" -type f)
+RUN mkdir -p out && javac -cp "lib/*" -d out $(find src -type f -name "*.java")
 
 EXPOSE 8080
 
