@@ -5,33 +5,42 @@ import java.sql.DriverManager;
 
 public class DBConnection {
 
-    private static final String URL = System.getenv("DB_URL");
-    private static final String USERNAME = System.getenv("DB_USERNAME");
-    private static final String PASSWORD = System.getenv("DB_PASSWORD");
+    public static Connection getConnection() throws Exception {
 
-    public static Connection getConnection() {
+        String url = System.getenv("DB_URL");
+        String username = System.getenv("DB_USERNAME");
+        String password = System.getenv("DB_PASSWORD");
 
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
+        System.out.println("DB_URL exists: " + (url != null && !url.isEmpty()));
+        System.out.println("DB_USERNAME exists: " + (username != null && !username.isEmpty()));
+        System.out.println("DB_PASSWORD exists: " + (password != null && !password.isEmpty()));
 
-            Connection connection =
-                    DriverManager.getConnection(
-                            URL,
-                            USERNAME,
-                            PASSWORD
-                    );
-
-            System.out.println("Database Connected Successfully!");
-            System.out.println("Database = " + connection.getCatalog());
-
-            return connection;
-
-        } catch (Exception e) {
-
-            System.out.println("Database Connection Failed!");
-            e.printStackTrace();
-
-            return null;
+        if (url == null || url.isEmpty()) {
+            throw new Exception("DB_URL environment variable is missing");
         }
+
+        if (username == null || username.isEmpty()) {
+            throw new Exception("DB_USERNAME environment variable is missing");
+        }
+
+        if (password == null || password.isEmpty()) {
+            throw new Exception("DB_PASSWORD environment variable is missing");
+        }
+
+        Class.forName("com.mysql.cj.jdbc.Driver");
+
+        Connection connection =
+                DriverManager.getConnection(
+                        url,
+                        username,
+                        password
+                );
+
+        System.out.println("=================================");
+        System.out.println("DATABASE CONNECTED SUCCESSFULLY");
+        System.out.println("Database = " + connection.getCatalog());
+        System.out.println("=================================");
+
+        return connection;
     }
 }
