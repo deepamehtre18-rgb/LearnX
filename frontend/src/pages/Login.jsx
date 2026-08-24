@@ -10,7 +10,7 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
 
     setError("");
@@ -31,21 +31,48 @@ function Login() {
       return;
     }
 
-    // Show loading state
     setLoading(true);
 
-    // Store logged-in user
-    localStorage.setItem(
-      "user",
-      JSON.stringify({
-        email: email.trim(),
-      })
-    );
+    try {
+      const response = await fetch(
+        "https://learnx-backend.onrender.com/api/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: email.trim(),
+            password: password,
+          }),
+        }
+      );
 
-    // Small delay for better interaction
-    setTimeout(() => {
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Invalid email or password.");
+        setLoading(false);
+        return;
+      }
+
+      // Store the actual registered user
+      localStorage.setItem(
+        "user",
+        JSON.stringify(data.user)
+      );
+
+      // Go to dashboard
       navigate("/dashboard");
-    }, 500);
+
+    } catch (error) {
+      console.error(error);
+      setError(
+        "Unable to connect to server. Please try again."
+      );
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -68,15 +95,25 @@ function Login() {
           textAlign: "center",
         }}
       >
-        <h1 style={{ marginBottom: "5px" }}>LearnX</h1>
+        <h1 style={{ marginBottom: "5px" }}>
+          LearnX
+        </h1>
 
-        <p style={{ color: "#666", marginBottom: "25px" }}>
+        <p
+          style={{
+            color: "#666",
+            marginBottom: "25px",
+          }}
+        >
           Online Learning & Quiz Platform
         </p>
 
-        <h2 style={{ marginBottom: "20px" }}>Login</h2>
+        <h2 style={{ marginBottom: "20px" }}>
+          Login
+        </h2>
 
         <form onSubmit={handleLogin}>
+
           {/* Email */}
           <input
             type="email"
@@ -97,7 +134,11 @@ function Login() {
           />
 
           {/* Password */}
-          <div style={{ position: "relative" }}>
+          <div
+            style={{
+              position: "relative",
+            }}
+          >
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Enter password"
@@ -109,7 +150,7 @@ function Login() {
               style={{
                 width: "100%",
                 padding: "12px",
-                paddingRight: "70px",
+                paddingRight: "55px",
                 marginBottom: "15px",
                 border: "1px solid #ccc",
                 borderRadius: "6px",
@@ -117,20 +158,29 @@ function Login() {
               }}
             />
 
+            {/* Show / Hide Password */}
             <button
               type="button"
-              onClick={() => setShowPassword(!showPassword)}
+              onClick={() =>
+                setShowPassword(!showPassword)
+              }
               style={{
                 position: "absolute",
                 right: "8px",
-                top: "6px",
+                top: "5px",
                 border: "none",
                 background: "transparent",
                 cursor: "pointer",
-                color: "#2563eb",
+                fontSize: "18px",
+                padding: "5px",
               }}
+              title={
+                showPassword
+                  ? "Hide password"
+                  : "Show password"
+              }
             >
-              {showPassword ? "Hide" : "Show"}
+              {showPassword ? "🙈" : "👁️"}
             </button>
           </div>
 
@@ -156,18 +206,26 @@ function Login() {
               padding: "12px",
               border: "none",
               borderRadius: "6px",
-              background: loading ? "#999" : "#2563eb",
+              background: loading
+                ? "#999"
+                : "#2563eb",
               color: "white",
-              cursor: loading ? "not-allowed" : "pointer",
+              cursor: loading
+                ? "not-allowed"
+                : "pointer",
               fontSize: "16px",
             }}
           >
-            {loading ? "Logging in..." : "Login"}
+            {loading
+              ? "Logging in..."
+              : "Login"}
           </button>
         </form>
 
+        {/* Register Link */}
         <p style={{ marginTop: "20px" }}>
           Don't have an account?{" "}
+
           <Link
             to="/register"
             style={{

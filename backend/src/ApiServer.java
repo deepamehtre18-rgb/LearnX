@@ -1,6 +1,7 @@
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import db.DBConnection;
+import db.UserDAO;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -8,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import model.User;
 
 public class ApiServer {
 
@@ -22,13 +24,36 @@ public class ApiServer {
                 new InetSocketAddress(port), 0
         );
 
-        // Root endpoint
+        // =====================================================
+        // API ENDPOINTS
+        // =====================================================
+
         server.createContext("/", ApiServer::home);
 
-        // API endpoints
-        server.createContext("/api/courses", ApiServer::getCourses);
-        server.createContext("/api/questions", ApiServer::getQuestions);
-        server.createContext("/api/videos", ApiServer::getVideos);
+        server.createContext(
+                "/api/courses",
+                ApiServer::getCourses
+        );
+
+        server.createContext(
+                "/api/questions",
+                ApiServer::getQuestions
+        );
+
+        server.createContext(
+                "/api/videos",
+                ApiServer::getVideos
+        );
+
+        server.createContext(
+                "/api/register",
+                ApiServer::registerUser
+        );
+
+        server.createContext(
+                "/api/login",
+                ApiServer::loginUser
+        );
 
         server.start();
 
@@ -41,7 +66,7 @@ public class ApiServer {
 
     // =========================================================
     // HOME / HEALTH CHECK
-    // URL: http://localhost:8080/
+    // URL: GET / 
     // =========================================================
 
     private static void home(HttpExchange exchange)
@@ -55,11 +80,13 @@ public class ApiServer {
         }
 
         if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
+
             sendResponse(
                     exchange,
                     405,
                     "{\"error\":\"Method not allowed\"}"
             );
+
             return;
         }
 
@@ -67,6 +94,241 @@ public class ApiServer {
                 "{\"message\":\"LearnX API Server is running\"}";
 
         sendResponse(exchange, 200, response);
+    }
+
+
+    // =========================================================
+    // REGISTER USER
+    // URL: POST /api/register
+    // =========================================================
+
+    private static void registerUser(HttpExchange exchange)
+            throws IOException {
+
+        addCorsHeaders(exchange);
+
+        // Handle browser preflight request
+        if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
+            exchange.sendResponseHeaders(204, -1);
+            return;
+        }
+
+        // Only POST allowed
+        if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
+
+            sendResponse(
+                    exchange,
+                    405,
+                    "{\"error\":\"Method not allowed\"}"
+            );
+
+            return;
+        }
+
+        try {
+
+            // Read request body
+            String json = new String(
+                    exchange.getRequestBody().readAllBytes(),
+                    StandardCharsets.UTF_8
+            );
+
+            System.out.println("Register Request: " + json);
+
+            // Extract values from JSON
+            String name = extractValue(json, "name");
+            String email = extractValue(json, "email");
+            String password = extractValue(json, "password");
+
+            // Validation
+            if (name.isEmpty() ||
+                    email.isEmpty() ||
+                    password.isEmpty()) {
+
+                sendResponse(
+                        exchange,
+                        400,
+                        "{\"error\":\"Please fill all fields\"}"
+                );
+
+                return;
+            }
+
+            // Default role for registered users
+            String role = "STUDENT";
+
+            User user = new User(
+                    0,
+                    name,
+                    email,
+                    password,
+                    role
+            );
+
+            UserDAO userDAO = new UserDAO();
+
+            boolean registered =
+                    userDAO.registerUser(user);
+
+            if (registered) {
+
+                String response =
+                        "{"
+                        + "\"success\":true,"
+                        + "\"message\":\"Registration successful\""
+                        + "}";
+
+                sendResponse(
+                        exchange,
+                        200,
+                        response
+                );
+
+            } else {
+
+                String response =
+                        "{"
+                        + "\"success\":false,"
+                        + "\"error\":\"Registration failed. Email may already exist.\""
+                        + "}";
+
+                sendResponse(
+                        exchange,
+                        400,
+                        response
+                );
+            }
+
+        } catch (Exception e) {
+
+            e.printStackTrace();
+
+            sendResponse(
+                    exchange,
+                    500,
+                    "{\"error\":\"Server error during registration\"}"
+            );
+        }
+    }
+
+
+    // =========================================================
+    // LOGIN USER
+    // URL: POST /api/login
+    // =========================================================
+
+    private static void loginUser(HttpExchange exchange)
+            throws IOException {
+
+        addCorsHeaders(exchange);
+
+        // Handle browser preflight request
+        if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
+            exchange.sendResponseHeaders(204, -1);
+            return;
+        }
+
+        // Only POST allowed
+        if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
+
+            sendResponse(
+                    exchange,
+                    405,
+                    "{\"error\":\"Method not allowed\"}"
+            );
+
+            return;
+        }
+
+        try {
+
+            // Read request body
+            String json = new String(
+                    exchange.getRequestBody().readAllBytes(),
+                    StandardCharsets.UTF_8
+            );
+
+            System.out.println("Login Request: " + json);
+
+            // Extract login information
+            String email = extractValue(json, "email");
+            String password = extractValue(json, "password");
+
+            // Validation
+            if (email.isEmpty() ||
+                    password.isEmpty()) {
+
+                sendResponse(
+                        exchange,
+                        400,
+                        "{\"error\":\"Please enter email and password\"}"
+                );
+
+                return;
+            }
+
+            // Login using UserDAO
+            UserDAO userDAO = new UserDAO();
+
+            User user =
+                    userDAO.loginUser(
+                            email,
+                            password
+                    );
+
+            // User found
+            if (user != null) {
+
+                String response =
+                        "{"
+                        + "\"success\":true,"
+                        + "\"message\":\"Login successful\","
+                        + "\"user\":{"
+                        + "\"userId\":" + user.getUserId() + ","
+                        + "\"name\":\"" + escape(user.getName()) + "\","
+                        + "\"email\":\"" + escape(user.getEmail()) + "\","
+                        + "\"password\":\"" + escape(user.getPassword()) + "\","
+                        + "\"role\":\"" + escape(user.getRole()) + "\""
+                        + "}"
+                        + "}";
+
+                System.out.println(
+                        "Login successful for: "
+                                + user.getEmail()
+                );
+
+                sendResponse(
+                        exchange,
+                        200,
+                        response
+                );
+
+            } else {
+
+                System.out.println(
+                        "Login failed for: " + email
+                );
+
+                sendResponse(
+                        exchange,
+                        401,
+                        "{"
+                        + "\"success\":false,"
+                        + "\"error\":\"Invalid email or password\""
+                        + "}"
+                );
+            }
+
+        } catch (Exception e) {
+
+            e.printStackTrace();
+
+            sendResponse(
+                    exchange,
+                    500,
+                    "{\"error\":\"Server error during login\"}"
+            );
+        }
     }
 
 
@@ -86,21 +348,34 @@ public class ApiServer {
         }
 
         if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
-            exchange.sendResponseHeaders(405, -1);
+
+            sendResponse(
+                    exchange,
+                    405,
+                    "{\"error\":\"Method not allowed\"}"
+            );
+
             return;
         }
 
         String query =
-                "SELECT course_id, course_name, trainer_name, duration, fees " +
-                "FROM courses";
+                "SELECT course_id, course_name, trainer_name, duration, fees "
+                + "FROM courses";
 
-        StringBuilder json = new StringBuilder("[");
+        StringBuilder json =
+                new StringBuilder("[");
+
         boolean first = true;
 
         try (
-                Connection connection = DBConnection.getConnection();
-                PreparedStatement ps = connection.prepareStatement(query);
-                ResultSet rs = ps.executeQuery()
+                Connection connection =
+                        DBConnection.getConnection();
+
+                PreparedStatement ps =
+                        connection.prepareStatement(query);
+
+                ResultSet rs =
+                        ps.executeQuery()
         ) {
 
             while (rs.next()) {
@@ -110,24 +385,41 @@ public class ApiServer {
                 }
 
                 json.append("{")
+
                         .append("\"id\":")
-                        .append(rs.getInt("course_id"))
+                        .append(
+                                rs.getInt("course_id")
+                        )
                         .append(",")
 
                         .append("\"courseName\":\"")
-                        .append(escape(rs.getString("course_name")))
+                        .append(
+                                escape(
+                                        rs.getString("course_name")
+                                )
+                        )
                         .append("\",")
 
                         .append("\"trainer\":\"")
-                        .append(escape(rs.getString("trainer_name")))
+                        .append(
+                                escape(
+                                        rs.getString("trainer_name")
+                                )
+                        )
                         .append("\",")
 
                         .append("\"duration\":\"")
-                        .append(escape(rs.getString("duration")))
+                        .append(
+                                escape(
+                                        rs.getString("duration")
+                                )
+                        )
                         .append("\",")
 
                         .append("\"fees\":")
-                        .append(rs.getDouble("fees"))
+                        .append(
+                                rs.getDouble("fees")
+                        )
 
                         .append("}");
 
@@ -136,18 +428,26 @@ public class ApiServer {
 
             json.append("]");
 
-            sendResponse(exchange, 200, json.toString());
+            sendResponse(
+                    exchange,
+                    200,
+                    json.toString()
+            );
 
         } catch (Exception e) {
 
             e.printStackTrace();
 
             String error =
-                    "{\"error\":\"" +
-                    escape(e.getMessage()) +
-                    "\"}";
+                    "{\"error\":\""
+                    + escape(e.getMessage())
+                    + "\"}";
 
-            sendResponse(exchange, 500, error);
+            sendResponse(
+                    exchange,
+                    500,
+                    error
+            );
         }
     }
 
@@ -168,17 +468,21 @@ public class ApiServer {
         }
 
         if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
+
             sendResponse(
                     exchange,
                     405,
                     "{\"error\":\"Method not allowed\"}"
             );
+
             return;
         }
 
-        String path = exchange.getRequestURI().getPath();
+        String path =
+                exchange.getRequestURI().getPath();
 
-        String[] parts = path.split("/");
+        String[] parts =
+                path.split("/");
 
         if (parts.length < 4) {
 
@@ -195,7 +499,8 @@ public class ApiServer {
 
         try {
 
-            courseId = Integer.parseInt(parts[3]);
+            courseId =
+                    Integer.parseInt(parts[3]);
 
         } catch (NumberFormatException e) {
 
@@ -217,18 +522,25 @@ public class ApiServer {
                 WHERE course_id = ?
                 """;
 
-        StringBuilder json = new StringBuilder("[");
+        StringBuilder json =
+                new StringBuilder("[");
+
         boolean first = true;
 
         try (
-                Connection connection = DBConnection.getConnection();
+                Connection connection =
+                        DBConnection.getConnection();
+
                 PreparedStatement ps =
                         connection.prepareStatement(query)
         ) {
 
             ps.setInt(1, courseId);
 
-            try (ResultSet rs = ps.executeQuery()) {
+            try (
+                    ResultSet rs =
+                            ps.executeQuery()
+            ) {
 
                 while (rs.next()) {
 
@@ -239,11 +551,15 @@ public class ApiServer {
                     json.append("{")
 
                             .append("\"id\":")
-                            .append(rs.getInt("video_id"))
+                            .append(
+                                    rs.getInt("video_id")
+                            )
                             .append(",")
 
                             .append("\"courseId\":")
-                            .append(rs.getInt("course_id"))
+                            .append(
+                                    rs.getInt("course_id")
+                            )
                             .append(",")
 
                             .append("\"title\":\"")
@@ -281,9 +597,9 @@ public class ApiServer {
             e.printStackTrace();
 
             String error =
-                    "{\"error\":\"" +
-                    escape(e.getMessage()) +
-                    "\"}";
+                    "{\"error\":\""
+                    + escape(e.getMessage())
+                    + "\"}";
 
             sendResponse(
                     exchange,
@@ -320,9 +636,11 @@ public class ApiServer {
             return;
         }
 
-        String path = exchange.getRequestURI().getPath();
+        String path =
+                exchange.getRequestURI().getPath();
 
-        String[] parts = path.split("/");
+        String[] parts =
+                path.split("/");
 
         if (parts.length < 4) {
 
@@ -339,7 +657,8 @@ public class ApiServer {
 
         try {
 
-            courseId = Integer.parseInt(parts[3]);
+            courseId =
+                    Integer.parseInt(parts[3]);
 
         } catch (NumberFormatException e) {
 
@@ -351,11 +670,6 @@ public class ApiServer {
 
             return;
         }
-
-
-        // =====================================================
-        // DATABASE QUERY
-        // =====================================================
 
         String query = """
                 SELECT question_id,
@@ -369,7 +683,9 @@ public class ApiServer {
                 WHERE course_id = ?
                 """;
 
-        StringBuilder json = new StringBuilder("[");
+        StringBuilder json =
+                new StringBuilder("[");
+
         boolean first = true;
 
         try (
@@ -382,7 +698,10 @@ public class ApiServer {
 
             ps.setInt(1, courseId);
 
-            try (ResultSet rs = ps.executeQuery()) {
+            try (
+                    ResultSet rs =
+                            ps.executeQuery()
+            ) {
 
                 while (rs.next()) {
 
@@ -393,13 +712,17 @@ public class ApiServer {
                     json.append("{")
 
                             .append("\"id\":")
-                            .append(rs.getInt("question_id"))
+                            .append(
+                                    rs.getInt("question_id")
+                            )
                             .append(",")
 
                             .append("\"question\":\"")
                             .append(
                                     escape(
-                                            rs.getString("question_text")
+                                            rs.getString(
+                                                    "question_text"
+                                            )
                                     )
                             )
                             .append("\",")
@@ -418,7 +741,7 @@ public class ApiServer {
                             .append(
                                     escape(
                                             rs.getString("option2")
-                                    )
+                                            )
                             )
                             .append("\",")
 
@@ -443,7 +766,9 @@ public class ApiServer {
                             .append("\"answer\":\"")
                             .append(
                                     escape(
-                                            rs.getString("correct_answer")
+                                            rs.getString(
+                                                    "correct_answer"
+                                            )
                                     )
                             )
                             .append("\"")
@@ -467,9 +792,9 @@ public class ApiServer {
             e.printStackTrace();
 
             String error =
-                    "{\"error\":\"" +
-                    escape(e.getMessage()) +
-                    "\"}";
+                    "{\"error\":\""
+                    + escape(e.getMessage())
+                    + "\"}";
 
             sendResponse(
                     exchange,
@@ -481,6 +806,41 @@ public class ApiServer {
 
 
     // =========================================================
+    // EXTRACT VALUE FROM SIMPLE JSON
+    // =========================================================
+
+    private static String extractValue(
+            String json,
+            String key
+    ) {
+
+        String search =
+                "\"" + key + "\":\"";
+
+        int start =
+                json.indexOf(search);
+
+        if (start == -1) {
+            return "";
+        }
+
+        start += search.length();
+
+        int end =
+                json.indexOf("\"", start);
+
+        if (end == -1) {
+            return "";
+        }
+
+        return json.substring(
+                start,
+                end
+        );
+    }
+
+
+    // =========================================================
     // CORS HEADERS
     // =========================================================
 
@@ -488,7 +848,6 @@ public class ApiServer {
             HttpExchange exchange
     ) {
 
-        // Allow deployed frontend + local frontend
         exchange.getResponseHeaders().set(
                 "Access-Control-Allow-Origin",
                 "*"
@@ -496,7 +855,7 @@ public class ApiServer {
 
         exchange.getResponseHeaders().set(
                 "Access-Control-Allow-Methods",
-                "GET, OPTIONS"
+                "GET, POST, OPTIONS"
         );
 
         exchange.getResponseHeaders().set(
@@ -522,15 +881,19 @@ public class ApiServer {
     ) throws IOException {
 
         byte[] bytes =
-                response.getBytes(StandardCharsets.UTF_8);
+                response.getBytes(
+                        StandardCharsets.UTF_8
+                );
 
         exchange.sendResponseHeaders(
                 statusCode,
                 bytes.length
         );
 
-        try (OutputStream os =
-                     exchange.getResponseBody()) {
+        try (
+                OutputStream os =
+                        exchange.getResponseBody()
+        ) {
 
             os.write(bytes);
         }
@@ -541,7 +904,9 @@ public class ApiServer {
     // ESCAPE JSON SPECIAL CHARACTERS
     // =========================================================
 
-    private static String escape(String value) {
+    private static String escape(
+            String value
+    ) {
 
         if (value == null) {
             return "";
