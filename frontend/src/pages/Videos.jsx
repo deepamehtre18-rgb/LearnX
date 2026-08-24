@@ -21,8 +21,7 @@ function Videos() {
           return;
         }
 
-        const response = await fetch(
-          `http://localhost:8080/api/videos/${courseId}`
+        const response = await fetch(`https://learnx-pxr0.onrender.com/api/videos/${courseId}`
         );
 
         if (!response.ok) {

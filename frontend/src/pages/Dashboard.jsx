@@ -21,7 +21,7 @@ function Dashboard() {
   // FETCH COURSES FROM BACKEND
   // =========================
   useEffect(() => {
-    fetch("http://localhost:8080/api/courses")
+    fetch("https://learnx-pxr0.onrender.com/api/courses")
       .then((response) => {
         if (!response.ok) {
           throw new Error("Failed to fetch courses");
