@@ -2,7 +2,7 @@ FROM eclipse-temurin:17-jdk
 
 WORKDIR /app
 
-COPY src ./src
+COPY backend/src ./src
 COPY lib ./lib
 
 RUN mkdir -p out && javac -cp "lib/*" -d out $(find src -type f -name "*.java")
