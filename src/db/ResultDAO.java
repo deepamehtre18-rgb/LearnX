@@ -10,7 +10,7 @@ public class ResultDAO {
 
     public boolean addResult(Result result) {
 
-        String query = "INSERT INTO results(student_id, student_name, quiz_title, score, total_marks) VALUES(?,?,?,?,?)";
+        String query = "INSERT INTO results(student_id, quiz_title, score, total_marks) VALUES(?,?,?,?)";
 
         try {
 
@@ -19,10 +19,9 @@ public class ResultDAO {
             PreparedStatement ps = connection.prepareStatement(query);
 
             ps.setInt(1, result.getStudentId());
-            ps.setString(2, result.getStudentName());
-            ps.setString(3, result.getQuizTitle());
-            ps.setInt(4, result.getScore());
-            ps.setInt(5, result.getTotalMarks());
+            ps.setString(2, result.getQuizTitle());
+            ps.setInt(3, result.getScore());
+            ps.setInt(4, result.getTotalMarks());
 
             int rows = ps.executeUpdate();
 
@@ -39,13 +38,17 @@ public class ResultDAO {
 
     public void viewResults(User user) {
 
-        String query = "SELECT * FROM results WHERE student_id = ?";
+        String query = "SELECT r.student_id, u.name AS student_name, " +
+               "r.quiz_title, r.score, r.total_marks " +
+               "FROM results r " +
+               "JOIN users u ON r.student_id = u.user_id " +
+               "WHERE r.student_id = ?";
         try{
             Connection connection = DBConnection.getConnection();
 
             PreparedStatement ps = connection.prepareStatement(query);
-            System.err.println("Logged User ID = " + user.getUserId());
-            System.err.println("Logged user Nmae = " + user.getName());
+            System.out.println("Logged User ID = " + user.getUserId());
+            System.out.println("Logged user Name = " + user.getName());
             ps.setInt(1, user.getUserId());
 
             ResultSet rs = ps.executeQuery();
@@ -53,7 +56,7 @@ public class ResultDAO {
             while (rs.next()) {
             System.out.println("------------------------");
             System.out.println("Student ID  : " + rs.getInt("student_id"));
-            System.out.println("Student Name : " + rs.getString("student_name"));
+            System.out.println("Student Name : " + rs.getString("Student_name"));
             System.out.println("Quiz Title   : " + rs.getString("quiz_title"));
             System.out.println("Score        : " + rs.getInt("score"));
             System.out.println("Total Marks  : " + rs.getInt("total_marks"));
