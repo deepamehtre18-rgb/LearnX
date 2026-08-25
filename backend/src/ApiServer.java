@@ -9,26 +9,45 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.concurrent.Executors;
 import model.User;
 
 public class ApiServer {
 
     public static void main(String[] args) throws Exception {
 
-        // Render provides the PORT environment variable
-        int port = Integer.parseInt(
-                System.getenv().getOrDefault("PORT", "8080")
-        );
+        // =====================================================
+        // PORT
+        // =====================================================
+
+        String portEnvironment = System.getenv("PORT");
+
+        int port;
+
+        if (portEnvironment != null && !portEnvironment.isEmpty()) {
+            port = Integer.parseInt(portEnvironment);
+        } else {
+            port = 8080;
+        }
 
         HttpServer server = HttpServer.create(
-                new InetSocketAddress(port), 0
+                new InetSocketAddress("0.0.0.0", port),
+                0
+        );
+
+        // Allow multiple requests at the same time
+        server.setExecutor(
+                Executors.newCachedThreadPool()
         );
 
         // =====================================================
         // API ENDPOINTS
         // =====================================================
 
-        server.createContext("/", ApiServer::home);
+        server.createContext(
+                "/",
+                ApiServer::home
+        );
 
         server.createContext(
                 "/api/courses",
@@ -55,18 +74,23 @@ public class ApiServer {
                 ApiServer::loginUser
         );
 
+        // =====================================================
+        // START SERVER
+        // =====================================================
+
         server.start();
 
         System.out.println("=================================");
         System.out.println("LearnX API Server Started");
         System.out.println("Running on port: " + port);
+        System.out.println("Server is ready to accept requests");
         System.out.println("=================================");
     }
 
 
     // =========================================================
     // HOME / HEALTH CHECK
-    // URL: GET / 
+    // GET /
     // =========================================================
 
     private static void home(HttpExchange exchange)
@@ -74,12 +98,12 @@ public class ApiServer {
 
         addCorsHeaders(exchange);
 
-        if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
-            exchange.sendResponseHeaders(204, -1);
+        if (handleOptions(exchange)) {
             return;
         }
 
-        if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
+        if (!exchange.getRequestMethod()
+                .equalsIgnoreCase("GET")) {
 
             sendResponse(
                     exchange,
@@ -91,30 +115,36 @@ public class ApiServer {
         }
 
         String response =
-                "{\"message\":\"LearnX API Server is running\"}";
+                "{"
+                + "\"success\":true,"
+                + "\"message\":\"LearnX API Server is running\""
+                + "}";
 
-        sendResponse(exchange, 200, response);
+        sendResponse(
+                exchange,
+                200,
+                response
+        );
     }
 
 
     // =========================================================
     // REGISTER USER
-    // URL: POST /api/register
+    // POST /api/register
     // =========================================================
 
-    private static void registerUser(HttpExchange exchange)
+    private static void registerUser(
+            HttpExchange exchange)
             throws IOException {
 
         addCorsHeaders(exchange);
 
-        // Handle browser preflight request
-        if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
-            exchange.sendResponseHeaders(204, -1);
+        if (handleOptions(exchange)) {
             return;
         }
 
-        // Only POST allowed
-        if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
+        if (!exchange.getRequestMethod()
+                .equalsIgnoreCase("POST")) {
 
             sendResponse(
                     exchange,
@@ -127,23 +157,32 @@ public class ApiServer {
 
         try {
 
-            // Read request body
             String json = new String(
                     exchange.getRequestBody().readAllBytes(),
                     StandardCharsets.UTF_8
             );
 
-            System.out.println("Register Request: " + json);
+            System.out.println(
+                    "Register Request Received: " + json
+            );
 
-            // Extract values from JSON
-            String name = extractValue(json, "name");
-            String email = extractValue(json, "email");
-            String password = extractValue(json, "password");
+            String name =
+                    extractValue(json, "name");
+
+            String email =
+                    extractValue(json, "email");
+
+            String password =
+                    extractValue(json, "password");
+
+            System.out.println(
+                    "Register Email: " + email
+            );
 
             // Validation
-            if (name.isEmpty() ||
-                    email.isEmpty() ||
-                    password.isEmpty()) {
+            if (name.isEmpty()
+                    || email.isEmpty()
+                    || password.isEmpty()) {
 
                 sendResponse(
                         exchange,
@@ -154,7 +193,6 @@ public class ApiServer {
                 return;
             }
 
-            // Default role for registered users
             String role = "STUDENT";
 
             User user = new User(
@@ -165,10 +203,18 @@ public class ApiServer {
                     role
             );
 
+            System.out.println(
+                    "Connecting to database for registration..."
+            );
+
             UserDAO userDAO = new UserDAO();
 
             boolean registered =
                     userDAO.registerUser(user);
+
+            System.out.println(
+                    "Registration result: " + registered
+            );
 
             if (registered) {
 
@@ -201,12 +247,19 @@ public class ApiServer {
 
         } catch (Exception e) {
 
+            System.err.println(
+                    "REGISTER ERROR:"
+            );
+
             e.printStackTrace();
 
             sendResponse(
                     exchange,
                     500,
-                    "{\"error\":\"Server error during registration\"}"
+                    "{"
+                    + "\"success\":false,"
+                    + "\"error\":\"Server error during registration\""
+                    + "}"
             );
         }
     }
@@ -214,22 +267,50 @@ public class ApiServer {
 
     // =========================================================
     // LOGIN USER
-    // URL: POST /api/login
+    // POST /api/login
     // =========================================================
 
-    private static void loginUser(HttpExchange exchange)
+    private static void loginUser(
+            HttpExchange exchange)
             throws IOException {
+
+        System.out.println(
+                "---------------------------------"
+        );
+
+        System.out.println(
+                "LOGIN REQUEST RECEIVED"
+        );
+
+        System.out.println(
+                "Method: "
+                        + exchange.getRequestMethod()
+        );
+
+        System.out.println(
+                "Path: "
+                        + exchange.getRequestURI().getPath()
+        );
 
         addCorsHeaders(exchange);
 
-        // Handle browser preflight request
-        if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
-            exchange.sendResponseHeaders(204, -1);
+        // Handle browser preflight
+        if (handleOptions(exchange)) {
+
+            System.out.println(
+                    "OPTIONS request handled"
+            );
+
             return;
         }
 
         // Only POST allowed
-        if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
+        if (!exchange.getRequestMethod()
+                .equalsIgnoreCase("POST")) {
+
+            System.out.println(
+                    "Invalid login method"
+            );
 
             sendResponse(
                     exchange,
@@ -242,33 +323,68 @@ public class ApiServer {
 
         try {
 
-            // Read request body
+            // =================================================
+            // READ REQUEST BODY
+            // =================================================
+
             String json = new String(
                     exchange.getRequestBody().readAllBytes(),
                     StandardCharsets.UTF_8
             );
 
-            System.out.println("Login Request: " + json);
+            System.out.println(
+                    "Login Request Body: " + json
+            );
 
-            // Extract login information
-            String email = extractValue(json, "email");
-            String password = extractValue(json, "password");
+            // =================================================
+            // EXTRACT EMAIL + PASSWORD
+            // =================================================
 
-            // Validation
-            if (email.isEmpty() ||
-                    password.isEmpty()) {
+            String email =
+                    extractValue(json, "email");
+
+            String password =
+                    extractValue(json, "password");
+
+            System.out.println(
+                    "Login Email: " + email
+            );
+
+            // DO NOT PRINT PASSWORD IN LOGS
+
+            // =================================================
+            // VALIDATION
+            // =================================================
+
+            if (email.isEmpty()
+                    || password.isEmpty()) {
+
+                System.out.println(
+                        "Login validation failed"
+                );
 
                 sendResponse(
                         exchange,
                         400,
-                        "{\"error\":\"Please enter email and password\"}"
+                        "{"
+                        + "\"success\":false,"
+                        + "\"error\":\"Please enter email and password\""
+                        + "}"
                 );
 
                 return;
             }
 
-            // Login using UserDAO
-            UserDAO userDAO = new UserDAO();
+            // =================================================
+            // DATABASE LOGIN
+            // =================================================
+
+            System.out.println(
+                    "Attempting database login..."
+            );
+
+            UserDAO userDAO =
+                    new UserDAO();
 
             User user =
                     userDAO.loginUser(
@@ -276,26 +392,47 @@ public class ApiServer {
                             password
                     );
 
-            // User found
+            System.out.println(
+                    "Database login completed"
+            );
+
+            // =================================================
+            // USER FOUND
+            // =================================================
+
             if (user != null) {
+
+                System.out.println(
+                        "LOGIN SUCCESS: "
+                                + user.getEmail()
+                );
+
+                /*
+                 * IMPORTANT:
+                 *
+                 * Do NOT send the password back
+                 * to the frontend.
+                 */
 
                 String response =
                         "{"
                         + "\"success\":true,"
                         + "\"message\":\"Login successful\","
                         + "\"user\":{"
-                        + "\"userId\":" + user.getUserId() + ","
-                        + "\"name\":\"" + escape(user.getName()) + "\","
-                        + "\"email\":\"" + escape(user.getEmail()) + "\","
-                        + "\"password\":\"" + escape(user.getPassword()) + "\","
-                        + "\"role\":\"" + escape(user.getRole()) + "\""
+                        + "\"userId\":"
+                        + user.getUserId()
+                        + ","
+                        + "\"name\":\""
+                        + escape(user.getName())
+                        + "\","
+                        + "\"email\":\""
+                        + escape(user.getEmail())
+                        + "\","
+                        + "\"role\":\""
+                        + escape(user.getRole())
+                        + "\""
                         + "}"
                         + "}";
-
-                System.out.println(
-                        "Login successful for: "
-                                + user.getEmail()
-                );
 
                 sendResponse(
                         exchange,
@@ -303,10 +440,17 @@ public class ApiServer {
                         response
                 );
 
-            } else {
+            }
+
+            // =================================================
+            // USER NOT FOUND
+            // =================================================
+
+            else {
 
                 System.out.println(
-                        "Login failed for: " + email
+                        "LOGIN FAILED: Invalid credentials for "
+                                + email
                 );
 
                 sendResponse(
@@ -321,33 +465,45 @@ public class ApiServer {
 
         } catch (Exception e) {
 
+            System.err.println(
+                    "LOGIN SERVER ERROR:"
+            );
+
             e.printStackTrace();
 
             sendResponse(
                     exchange,
                     500,
-                    "{\"error\":\"Server error during login\"}"
+                    "{"
+                    + "\"success\":false,"
+                    + "\"error\":\"Server error during login\""
+                    + "}"
             );
         }
+
+        System.out.println(
+                "---------------------------------"
+        );
     }
 
 
     // =========================================================
     // GET COURSES
-    // URL: /api/courses
+    // GET /api/courses
     // =========================================================
 
-    private static void getCourses(HttpExchange exchange)
+    private static void getCourses(
+            HttpExchange exchange)
             throws IOException {
 
         addCorsHeaders(exchange);
 
-        if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
-            exchange.sendResponseHeaders(204, -1);
+        if (handleOptions(exchange)) {
             return;
         }
 
-        if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
+        if (!exchange.getRequestMethod()
+                .equalsIgnoreCase("GET")) {
 
             sendResponse(
                     exchange,
@@ -359,7 +515,11 @@ public class ApiServer {
         }
 
         String query =
-                "SELECT course_id, course_name, trainer_name, duration, fees "
+                "SELECT course_id, "
+                + "course_name, "
+                + "trainer_name, "
+                + "duration, "
+                + "fees "
                 + "FROM courses";
 
         StringBuilder json =
@@ -395,7 +555,9 @@ public class ApiServer {
                         .append("\"courseName\":\"")
                         .append(
                                 escape(
-                                        rs.getString("course_name")
+                                        rs.getString(
+                                                "course_name"
+                                        )
                                 )
                         )
                         .append("\",")
@@ -403,7 +565,9 @@ public class ApiServer {
                         .append("\"trainer\":\"")
                         .append(
                                 escape(
-                                        rs.getString("trainer_name")
+                                        rs.getString(
+                                                "trainer_name"
+                                        )
                                 )
                         )
                         .append("\",")
@@ -411,7 +575,9 @@ public class ApiServer {
                         .append("\"duration\":\"")
                         .append(
                                 escape(
-                                        rs.getString("duration")
+                                        rs.getString(
+                                                "duration"
+                                        )
                                 )
                         )
                         .append("\",")
@@ -438,15 +604,14 @@ public class ApiServer {
 
             e.printStackTrace();
 
-            String error =
-                    "{\"error\":\""
-                    + escape(e.getMessage())
-                    + "\"}";
-
             sendResponse(
                     exchange,
                     500,
-                    error
+                    "{"
+                    + "\"error\":\""
+                    + escape(e.getMessage())
+                    + "\""
+                    + "}"
             );
         }
     }
@@ -454,20 +619,21 @@ public class ApiServer {
 
     // =========================================================
     // GET VIDEOS BY COURSE
-    // URL: /api/videos/1
+    // GET /api/videos/1
     // =========================================================
 
-    private static void getVideos(HttpExchange exchange)
+    private static void getVideos(
+            HttpExchange exchange)
             throws IOException {
 
         addCorsHeaders(exchange);
 
-        if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
-            exchange.sendResponseHeaders(204, -1);
+        if (handleOptions(exchange)) {
             return;
         }
 
-        if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
+        if (!exchange.getRequestMethod()
+                .equalsIgnoreCase("GET")) {
 
             sendResponse(
                     exchange,
@@ -513,14 +679,13 @@ public class ApiServer {
             return;
         }
 
-        String query = """
-                SELECT video_id,
-                       course_id,
-                       video_title,
-                       video_url
-                FROM videos
-                WHERE course_id = ?
-                """;
+        String query =
+                "SELECT video_id, "
+                + "course_id, "
+                + "video_title, "
+                + "video_url "
+                + "FROM videos "
+                + "WHERE course_id = ?";
 
         StringBuilder json =
                 new StringBuilder("[");
@@ -535,7 +700,7 @@ public class ApiServer {
                         connection.prepareStatement(query)
         ) {
 
-            ps.setInt(1, courseId);
+           ps.setInt(1, courseId);
 
             try (
                     ResultSet rs =
@@ -552,20 +717,26 @@ public class ApiServer {
 
                             .append("\"id\":")
                             .append(
-                                    rs.getInt("video_id")
+                                    rs.getInt(
+                                            "video_id"
+                                    )
                             )
                             .append(",")
 
                             .append("\"courseId\":")
                             .append(
-                                    rs.getInt("course_id")
+                                    rs.getInt(
+                                            "course_id"
+                                    )
                             )
                             .append(",")
 
                             .append("\"title\":\"")
                             .append(
                                     escape(
-                                            rs.getString("video_title")
+                                            rs.getString(
+                                                    "video_title"
+                                            )
                                     )
                             )
                             .append("\",")
@@ -573,7 +744,9 @@ public class ApiServer {
                             .append("\"url\":\"")
                             .append(
                                     escape(
-                                            rs.getString("video_url")
+                                            rs.getString(
+                                                    "video_url"
+                                            )
                                     )
                             )
                             .append("\"")
@@ -596,15 +769,14 @@ public class ApiServer {
 
             e.printStackTrace();
 
-            String error =
-                    "{\"error\":\""
-                    + escape(e.getMessage())
-                    + "\"}";
-
             sendResponse(
                     exchange,
                     500,
-                    error
+                    "{"
+                    + "\"error\":\""
+                    + escape(e.getMessage())
+                    + "\""
+                    + "}"
             );
         }
     }
@@ -612,20 +784,21 @@ public class ApiServer {
 
     // =========================================================
     // GET QUESTIONS BY COURSE
-    // URL: /api/questions/1
+    // GET /api/questions/1
     // =========================================================
 
-    private static void getQuestions(HttpExchange exchange)
+    private static void getQuestions(
+            HttpExchange exchange)
             throws IOException {
 
         addCorsHeaders(exchange);
 
-        if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
-            exchange.sendResponseHeaders(204, -1);
+        if (handleOptions(exchange)) {
             return;
         }
 
-        if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
+        if (!exchange.getRequestMethod()
+                .equalsIgnoreCase("GET")) {
 
             sendResponse(
                     exchange,
@@ -671,17 +844,16 @@ public class ApiServer {
             return;
         }
 
-        String query = """
-                SELECT question_id,
-                       question_text,
-                       option1,
-                       option2,
-                       option3,
-                       option4,
-                       correct_answer
-                FROM questions
-                WHERE course_id = ?
-                """;
+        String query =
+                "SELECT question_id, "
+                + "question_text, "
+                + "option1, "
+                + "option2, "
+                + "option3, "
+                + "option4, "
+                + "correct_answer "
+                + "FROM questions "
+                + "WHERE course_id = ?";
 
         StringBuilder json =
                 new StringBuilder("[");
@@ -713,7 +885,9 @@ public class ApiServer {
 
                             .append("\"id\":")
                             .append(
-                                    rs.getInt("question_id")
+                                    rs.getInt(
+                                            "question_id"
+                                    )
                             )
                             .append(",")
 
@@ -725,30 +899,19 @@ public class ApiServer {
                                             )
                                     )
                             )
-                            .append("\",")
+                            .append(",");
 
-                            .append("\"options\":[")
+                    // Fix JSON construction properly
+                    json.setLength(json.length() - 1);
 
-                            .append("\"")
-                            .append(
-                                    escape(
-                                            rs.getString("option1")
-                                    )
-                            )
-                            .append("\",")
+                    json.append("\"options\":[")
 
                             .append("\"")
                             .append(
                                     escape(
-                                            rs.getString("option2")
+                                            rs.getString(
+                                                    "option1"
                                             )
-                            )
-                            .append("\",")
-
-                            .append("\"")
-                            .append(
-                                    escape(
-                                            rs.getString("option3")
                                     )
                             )
                             .append("\",")
@@ -756,7 +919,29 @@ public class ApiServer {
                             .append("\"")
                             .append(
                                     escape(
-                                            rs.getString("option4")
+                                            rs.getString(
+                                                    "option2"
+                                            )
+                                    )
+                            )
+                            .append("\",")
+
+                            .append("\"")
+                            .append(
+                                    escape(
+                                            rs.getString(
+                                                    "option3"
+                                            )
+                                    )
+                            )
+                            .append("\",")
+
+                            .append("\"")
+                            .append(
+                                    escape(
+                                            rs.getString(
+                                                    "option4"
+                                            )
                                     )
                             )
                             .append("\"")
@@ -791,17 +976,39 @@ public class ApiServer {
 
             e.printStackTrace();
 
-            String error =
-                    "{\"error\":\""
-                    + escape(e.getMessage())
-                    + "\"}";
-
             sendResponse(
                     exchange,
                     500,
-                    error
+                    "{"
+                    + "\"error\":\""
+                    + escape(e.getMessage())
+                    + "\""
+                    + "}"
             );
         }
+    }
+    // =========================================================
+    // HANDLE OPTIONS / CORS PREFLIGHT
+    // =========================================================
+
+    private static boolean handleOptions(
+            HttpExchange exchange)
+            throws IOException {
+
+        if (exchange.getRequestMethod()
+                .equalsIgnoreCase("OPTIONS")) {
+
+            exchange.sendResponseHeaders(
+                    204,
+                    -1
+            );
+
+            exchange.close();
+
+            return true;
+        }
+
+        return false;
     }
 
 
@@ -811,11 +1018,14 @@ public class ApiServer {
 
     private static String extractValue(
             String json,
-            String key
-    ) {
+            String key) {
+
+        if (json == null || json.isEmpty()) {
+            return "";
+        }
 
         String search =
-                "\"" + key + "\":\"";
+                "\"" + key + "\":";
 
         int start =
                 json.indexOf(search);
@@ -826,17 +1036,70 @@ public class ApiServer {
 
         start += search.length();
 
-        int end =
-                json.indexOf("\"", start);
+        // Skip spaces
+        while (
+                start < json.length()
+                        && Character.isWhitespace(
+                                json.charAt(start)
+                        )
+        ) {
+            start++;
+        }
 
-        if (end == -1) {
+        // Expect opening quote
+        if (
+                start >= json.length()
+                        || json.charAt(start) != '"'
+        ) {
             return "";
         }
 
-        return json.substring(
-                start,
-                end
-        );
+        start++;
+
+        StringBuilder value =
+                new StringBuilder();
+
+        boolean escaped = false;
+
+        for (
+                int i = start;
+                i < json.length();
+                i++
+        ) {
+
+            char c = json.charAt(i);
+
+            if (escaped) {
+
+                if (c == '"' || c == '\\') {
+                    value.append(c);
+                } else if (c == 'n') {
+                    value.append('\n');
+                } else if (c == 'r') {
+                    value.append('\r');
+                } else if (c == 't') {
+                    value.append('\t');
+                } else {
+                    value.append(c);
+                }
+
+                escaped = false;
+
+            } else if (c == '\\') {
+
+                escaped = true;
+
+            } else if (c == '"') {
+
+                break;
+
+            } else {
+
+                value.append(c);
+            }
+        }
+
+        return value.toString().trim();
     }
 
 
@@ -845,8 +1108,7 @@ public class ApiServer {
     // =========================================================
 
     private static void addCorsHeaders(
-            HttpExchange exchange
-    ) {
+            HttpExchange exchange) {
 
         exchange.getResponseHeaders().set(
                 "Access-Control-Allow-Origin",
@@ -860,7 +1122,12 @@ public class ApiServer {
 
         exchange.getResponseHeaders().set(
                 "Access-Control-Allow-Headers",
-                "Content-Type"
+                "Content-Type, Accept"
+        );
+
+        exchange.getResponseHeaders().set(
+                "Access-Control-Max-Age",
+                "86400"
         );
 
         exchange.getResponseHeaders().set(
@@ -877,13 +1144,18 @@ public class ApiServer {
     private static void sendResponse(
             HttpExchange exchange,
             int statusCode,
-            String response
-    ) throws IOException {
+            String response)
+            throws IOException {
 
         byte[] bytes =
                 response.getBytes(
                         StandardCharsets.UTF_8
                 );
+
+        exchange.getResponseHeaders().set(
+                "Content-Type",
+                "application/json; charset=UTF-8"
+        );
 
         exchange.sendResponseHeaders(
                 statusCode,
@@ -896,7 +1168,10 @@ public class ApiServer {
         ) {
 
             os.write(bytes);
+            os.flush();
         }
+
+        exchange.close();
     }
 
 
@@ -905,8 +1180,7 @@ public class ApiServer {
     // =========================================================
 
     private static String escape(
-            String value
-    ) {
+            String value) {
 
         if (value == null) {
             return "";
