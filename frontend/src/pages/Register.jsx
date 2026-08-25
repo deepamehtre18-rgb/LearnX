@@ -35,9 +35,17 @@ function Register() {
 
     setLoading(true);
 
+    // Create timeout controller
+    const controller = new AbortController();
+
+    // Give Render enough time to wake up
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 90000);
+
     try {
       const response = await fetch(
-        "https://learnx-backend.onrender.com/api/register",
+        "https://learnx-pxr0.onrender.com/api/register",
         {
           method: "POST",
           headers: {
@@ -48,27 +56,52 @@ function Register() {
             email: email.trim(),
             password: password,
           }),
+          signal: controller.signal,
         }
       );
 
-      const data = await response.json();
+      clearTimeout(timeoutId);
+
+      // Try to read the response safely
+      let data = {};
+
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error("Invalid server response:", jsonError);
+      }
 
       if (!response.ok) {
-        setError(data.error || "Registration failed.");
-        setLoading(false);
+        setError(
+          data.error ||
+            data.message ||
+            "Registration failed. Please try again."
+        );
         return;
       }
 
+      // Registration successful
       alert("Registration successful! You can now login.");
 
       navigate("/login");
 
     } catch (error) {
-      console.error(error);
-      setError("Unable to connect to server. Please try again.");
-    }
+      clearTimeout(timeoutId);
 
-    setLoading(false);
+      console.error("Registration error:", error);
+
+      if (error.name === "AbortError") {
+        setError(
+          "Server is taking too long to respond. Please try again."
+        );
+      } else {
+        setError(
+          "Unable to connect to server. Please try again."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -180,7 +213,9 @@ function Register() {
             {/* Eye button */}
             <button
               type="button"
-              onClick={() => setShowPassword(!showPassword)}
+              onClick={() =>
+                setShowPassword(!showPassword)
+              }
               style={{
                 position: "absolute",
                 right: "8px",
@@ -198,7 +233,7 @@ function Register() {
                   : "Show password"
               }
             >
-              {showPassword ? "🙈" : "👁️"}
+              {showPassword ? "🙈" : "show"}
             </button>
           </div>
 
