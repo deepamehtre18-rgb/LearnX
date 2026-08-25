@@ -34,8 +34,22 @@ function Login() {
     setLoading(true);
 
     try {
+      // Wake up Render backend
+      setError("Connecting to server...");
+
+      await fetch(
+        "https://learnx-pxr0.onrender.com/",
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+
+      // Send login request
+      setError("");
+
       const response = await fetch(
-        "https://learnx-backend.onrender.com/api/login",
+        "https://learnx-pxr0.onrender.com/api/login",
         {
           method: "POST",
           headers: {
@@ -51,12 +65,13 @@ function Login() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Invalid email or password.");
-        setLoading(false);
+        setError(
+          data.error || "Invalid email or password."
+        );
         return;
       }
 
-      // Store the actual registered user
+      // Store logged-in user
       localStorage.setItem(
         "user",
         JSON.stringify(data.user)
@@ -66,13 +81,14 @@ function Login() {
       navigate("/dashboard");
 
     } catch (error) {
-      console.error(error);
+      console.error("Login error:", error);
+
       setError(
         "Unable to connect to server. Please try again."
       );
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -95,7 +111,11 @@ function Login() {
           textAlign: "center",
         }}
       >
-        <h1 style={{ marginBottom: "5px" }}>
+        <h1
+          style={{
+            marginBottom: "5px",
+          }}
+        >
           LearnX
         </h1>
 
@@ -108,7 +128,11 @@ function Login() {
           Online Learning & Quiz Platform
         </p>
 
-        <h2 style={{ marginBottom: "20px" }}>
+        <h2
+          style={{
+            marginBottom: "20px",
+          }}
+        >
           Login
         </h2>
 
@@ -140,7 +164,11 @@ function Login() {
             }}
           >
             <input
-              type={showPassword ? "text" : "password"}
+              type={
+                showPassword
+                  ? "text"
+                  : "password"
+              }
               placeholder="Enter password"
               value={password}
               onChange={(e) => {
@@ -180,15 +208,21 @@ function Login() {
                   : "Show password"
               }
             >
-              {showPassword ? "🙈" : "👁️"}
+              {showPassword
+                ? "🙈"
+                : "👁️"}
             </button>
           </div>
 
-          {/* Error */}
+          {/* Error / Status */}
           {error && (
             <p
               style={{
-                color: "red",
+                color:
+                  error ===
+                  "Connecting to server..."
+                    ? "#666"
+                    : "red",
                 fontSize: "14px",
                 marginBottom: "15px",
               }}
@@ -223,7 +257,11 @@ function Login() {
         </form>
 
         {/* Register Link */}
-        <p style={{ marginTop: "20px" }}>
+        <p
+          style={{
+            marginTop: "20px",
+          }}
+        >
           Don't have an account?{" "}
 
           <Link
