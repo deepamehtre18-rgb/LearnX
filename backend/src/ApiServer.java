@@ -783,210 +783,213 @@ public class ApiServer {
 
 
     // =========================================================
-    // GET QUESTIONS BY COURSE
-    // GET /api/questions/1
-    // =========================================================
+// GET QUESTIONS BY COURSE
+// GET /api/questions/1
+// =========================================================
 
-    private static void getQuestions(
-            HttpExchange exchange)
-            throws IOException {
+private static void getQuestions(
+        HttpExchange exchange)
+        throws IOException {
 
-        addCorsHeaders(exchange);
+    addCorsHeaders(exchange);
 
-        if (handleOptions(exchange)) {
-            return;
-        }
+    if (handleOptions(exchange)) {
+        return;
+    }
 
-        if (!exchange.getRequestMethod()
-                .equalsIgnoreCase("GET")) {
+    if (!exchange.getRequestMethod()
+            .equalsIgnoreCase("GET")) {
 
-            sendResponse(
-                    exchange,
-                    405,
-                    "{\"error\":\"Method not allowed\"}"
-            );
+        sendResponse(
+                exchange,
+                405,
+                "{\"error\":\"Method not allowed\"}"
+        );
 
-            return;
-        }
+        return;
+    }
 
-        String path =
-                exchange.getRequestURI().getPath();
+    String path =
+            exchange.getRequestURI().getPath();
 
-        String[] parts =
-                path.split("/");
+    String[] parts =
+            path.split("/");
 
-        if (parts.length < 4) {
+    if (parts.length < 4) {
 
-            sendResponse(
-                    exchange,
-                    400,
-                    "{\"error\":\"Course ID is required\"}"
-            );
+        sendResponse(
+                exchange,
+                400,
+                "{\"error\":\"Course ID is required\"}"
+        );
 
-            return;
-        }
+        return;
+    }
 
-        int courseId;
+    int courseId;
 
-        try {
+    try {
 
-            courseId =
-                    Integer.parseInt(parts[3]);
+        courseId =
+                Integer.parseInt(parts[3]);
 
-        } catch (NumberFormatException e) {
+    } catch (NumberFormatException e) {
 
-            sendResponse(
-                    exchange,
-                    400,
-                    "{\"error\":\"Invalid course ID\"}"
-            );
+        sendResponse(
+                exchange,
+                400,
+                "{\"error\":\"Invalid course ID\"}"
+        );
 
-            return;
-        }
+        return;
+    }
 
-        String query =
-                "SELECT question_id, "
-                + "question_text, "
-                + "option1, "
-                + "option2, "
-                + "option3, "
-                + "option4, "
-                + "correct_answer "
-                + "FROM questions "
-                + "WHERE course_id = ?";
+    String query =
+            "SELECT question_id, "
+            + "question_text, "
+            + "option1, "
+            + "option2, "
+            + "option3, "
+            + "option4, "
+            + "correct_answer "
+            + "FROM questions "
+            + "WHERE course_id = ?";
 
-        StringBuilder json =
-                new StringBuilder("[");
+    StringBuilder json =
+            new StringBuilder("[");
 
-        boolean first = true;
+    boolean first = true;
+
+    try (
+            Connection connection =
+                    DBConnection.getConnection();
+
+            PreparedStatement ps =
+                    connection.prepareStatement(query)
+    ) {
+
+        ps.setInt(1, courseId);
 
         try (
-                Connection connection =
-                        DBConnection.getConnection();
-
-                PreparedStatement ps =
-                        connection.prepareStatement(query)
+                ResultSet rs =
+                        ps.executeQuery()
         ) {
 
-            ps.setInt(1, courseId);
+            while (rs.next()) {
 
-            try (
-                    ResultSet rs =
-                            ps.executeQuery()
-            ) {
-
-                while (rs.next()) {
-
-                    if (!first) {
-                        json.append(",");
-                    }
-
-                    json.append("{")
-
-                            .append("\"id\":")
-                            .append(
-                                    rs.getInt(
-                                            "question_id"
-                                    )
-                            )
-                            .append(",")
-
-                            .append("\"question\":\"")
-                            .append(
-                                    escape(
-                                            rs.getString(
-                                                    "question_text"
-                                            )
-                                    )
-                            )
-                            .append(",");
-
-                    // Fix JSON construction properly
-                    json.setLength(json.length() - 1);
-
-                    json.append("\"options\":[")
-
-                            .append("\"")
-                            .append(
-                                    escape(
-                                            rs.getString(
-                                                    "option1"
-                                            )
-                                    )
-                            )
-                            .append("\",")
-
-                            .append("\"")
-                            .append(
-                                    escape(
-                                            rs.getString(
-                                                    "option2"
-                                            )
-                                    )
-                            )
-                            .append("\",")
-
-                            .append("\"")
-                            .append(
-                                    escape(
-                                            rs.getString(
-                                                    "option3"
-                                            )
-                                    )
-                            )
-                            .append("\",")
-
-                            .append("\"")
-                            .append(
-                                    escape(
-                                            rs.getString(
-                                                    "option4"
-                                            )
-                                    )
-                            )
-                            .append("\"")
-
-                            .append("],")
-
-                            .append("\"answer\":\"")
-                            .append(
-                                    escape(
-                                            rs.getString(
-                                                    "correct_answer"
-                                            )
-                                    )
-                            )
-                            .append("\"")
-
-                            .append("}");
-
-                    first = false;
+                if (!first) {
+                    json.append(",");
                 }
+
+                json.append("{")
+
+                        // ID
+                        .append("\"id\":")
+                        .append(
+                                rs.getInt("question_id")
+                        )
+                        .append(",")
+
+                        // QUESTION
+                        .append("\"question\":\"")
+                        .append(
+                                escape(
+                                        rs.getString(
+                                                "question_text"
+                                        )
+                                )
+                        )
+                        .append("\",")
+
+                        // OPTIONS
+                        .append("\"options\":[")
+
+                        .append("\"")
+                        .append(
+                                escape(
+                                        rs.getString(
+                                                "option1"
+                                        )
+                                )
+                        )
+                        .append("\",")
+
+                        .append("\"")
+                        .append(
+                                escape(
+                                        rs.getString(
+                                                "option2"
+                                        )
+                                )
+                        )
+                        .append("\",")
+
+                        .append("\"")
+                        .append(
+                                escape(
+                                        rs.getString(
+                                                "option3"
+                                        )
+                                )
+                        )
+                        .append("\",")
+
+                        .append("\"")
+                        .append(
+                                escape(
+                                        rs.getString(
+                                                "option4"
+                                        )
+                                )
+                        )
+                        .append("\"")
+
+                        .append("],")
+
+                        // ANSWER
+                        .append("\"answer\":\"")
+                        .append(
+                                escape(
+                                        rs.getString(
+                                                "correct_answer"
+                                        )
+                                )
+                        )
+                        .append("\"")
+
+                        .append("}");
+
+                first = false;
             }
-
-            json.append("]");
-
-            sendResponse(
-                    exchange,
-                    200,
-                    json.toString()
-            );
-
-        } catch (Exception e) {
-
-            e.printStackTrace();
-
-            sendResponse(
-                    exchange,
-                    500,
-                    "{"
-                    + "\"error\":\""
-                    + escape(e.getMessage())
-                    + "\""
-                    + "}"
-            );
         }
+
+        json.append("]");
+
+        System.out.println(
+                "Questions JSON: " + json
+        );
+
+        sendResponse(
+                exchange,
+                200,
+                json.toString()
+        );
+
+    } catch (Exception e) {
+
+        e.printStackTrace();
+
+        sendResponse(
+                exchange,
+                500,
+                "{"
+                + "\"error\":\""
+                + escape(e.getMessage())
+                + "\""
+                + "}"
+        );
     }
+}
     // =========================================================
     // HANDLE OPTIONS / CORS PREFLIGHT
     // =========================================================

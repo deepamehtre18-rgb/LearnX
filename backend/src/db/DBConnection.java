@@ -1,8 +1,6 @@
 package db;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
-
 public class DBConnection {
 
     public static Connection getConnection() {
@@ -27,7 +25,6 @@ public class DBConnection {
                         "DB_URL environment variable is missing"
                 );
             }
-
             if (username == null || username.isEmpty()) {
                 throw new RuntimeException(
                         "DB_USERNAME environment variable is missing"

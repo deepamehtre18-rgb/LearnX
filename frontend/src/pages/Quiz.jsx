@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { getQuestions } from "../services/api";
 import "./Quiz.css";
 
 function Quiz() {
@@ -35,79 +36,105 @@ function Quiz() {
 
         console.log("Loading quiz for course:", courseId);
 
-        const response = await fetch(
-          `https://learnx-backend.onrender.com/api/questions/${courseId}`
-        );
+        const data = await getQuestions(courseId);
 
-        console.log("Quiz API status:", response.status);
+        console.log("Quiz data received:", data);
 
-        if (!response.ok) {
-          throw new Error(
-            `Server returned ${response.status}`
-          );
-        }
-
-        const data = await response.json();
-
-        console.log("Quiz API response:", data);
-
-        // -------------------------------------------------
-        // Handle different possible response formats
-        // -------------------------------------------------
+        // -----------------------------------------------
+        // HANDLE BACKEND RESPONSE
+        // -----------------------------------------------
 
         let questionData = data;
 
-        // If backend returns:
-        // { questions: [...] }
         if (data && Array.isArray(data.questions)) {
           questionData = data.questions;
-        }
-
-        // If backend returns:
-        // { data: [...] }
-        else if (data && Array.isArray(data.data)) {
+        } else if (data && Array.isArray(data.data)) {
           questionData = data.data;
         }
 
-        // Make sure we actually received an array
         if (!Array.isArray(questionData)) {
-          console.error(
-            "Unexpected quiz response format:",
-            data
-          );
+          console.error("Unexpected quiz response:", data);
 
           throw new Error(
             "Quiz questions were received in an unexpected format."
           );
         }
 
-        // -------------------------------------------------
-        // Validate questions
-        // -------------------------------------------------
+        // -----------------------------------------------
+        // NORMALIZE BACKEND DATA
+        // -----------------------------------------------
 
-        const validQuestions = questionData.filter(
-          (question) =>
-            question &&
-            question.question &&
-            Array.isArray(question.options)
-        );
+        const normalizedQuestions = questionData
+          .map((question) => {
+            if (!question) {
+              return null;
+            }
+
+            // Backend can return question or question_text
+            const questionText =
+              question.question ?? question.question_text;
+
+            // Backend can return options array
+            // OR individual option1, option2, option3, option4
+            let options = [];
+
+            if (Array.isArray(question.options)) {
+              options = question.options;
+            } else {
+              options = [
+                question.option1,
+                question.option2,
+                question.option3,
+                question.option4,
+              ].filter(
+                (option) =>
+                  option !== null &&
+                  option !== undefined &&
+                  String(option).trim() !== ""
+              );
+            }
+
+            // Backend can return answer or correct_answer
+            const correctAnswer =
+              question.answer ?? question.correct_answer;
+
+            if (
+              !questionText ||
+              options.length === 0 ||
+              correctAnswer === undefined ||
+              correctAnswer === null
+            ) {
+              return null;
+            }
+
+            return {
+              id: question.id ?? question.question_id,
+              question: questionText,
+              options: options,
+              answer: correctAnswer,
+            };
+          })
+          .filter(Boolean);
 
         console.log(
-          "Valid questions:",
-          validQuestions
+          "Normalized quiz questions:",
+          normalizedQuestions
         );
 
-        setQuestions(validQuestions);
-        setLoading(false);
+        if (normalizedQuestions.length === 0) {
+          throw new Error(
+            "No valid quiz questions were found."
+          );
+        }
 
+        setQuestions(normalizedQuestions);
       } catch (err) {
         console.error("Quiz loading error:", err);
 
         setError(
-          err.message ||
-          "Failed to load quiz questions."
+          err.message || "Failed to load quiz questions."
         );
-
+      } finally {
         setLoading(false);
       }
     };
@@ -132,7 +159,7 @@ function Quiz() {
 
   const nextQuestion = () => {
     if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
+      setCurrentQuestion((previous) => previous + 1);
     }
   };
 
@@ -142,8 +169,69 @@ function Quiz() {
 
   const previousQuestion = () => {
     if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1);
+      setCurrentQuestion((previous) => previous - 1);
     }
+  };
+
+  // =====================================================
+  // CHECK ANSWER
+  // =====================================================
+
+  const isAnswerCorrect = (question, selectedAnswer) => {
+    if (
+      selectedAnswer === undefined ||
+      selectedAnswer === null
+    ) {
+      return false;
+    }
+
+    const correctAnswer = String(question.answer)
+      .trim()
+      .toLowerCase();
+
+    const selected = String(selectedAnswer)
+      .trim()
+      .toLowerCase();
+
+    // Case 1:
+    // Backend stores actual option text
+    if (correctAnswer === selected) {
+      return true;
+    }
+
+    // Case 2:
+    // Backend stores A/B/C/D
+    const answerIndex =
+      ["a", "b", "c", "d"].indexOf(correctAnswer);
+
+    if (
+      answerIndex !== -1 &&
+      question.options[answerIndex] !== undefined
+    ) {
+      return (
+        String(question.options[answerIndex])
+          .trim()
+          .toLowerCase() === selected
+      );
+    }
+
+    // Case 3:
+    // Backend stores 1/2/3/4
+    const numericIndex =
+      parseInt(correctAnswer, 10) - 1;
+
+    if (
+      numericIndex >= 0 &&
+      numericIndex < question.options.length
+    ) {
+      return (
+        String(question.options[numericIndex])
+          .trim()
+          .toLowerCase() === selected
+      );
+    }
+
+    return false;
   };
 
   // =====================================================
@@ -154,8 +242,13 @@ function Quiz() {
     let totalScore = 0;
 
     questions.forEach((question, index) => {
+      const selectedAnswer = selectedAnswers[index];
+
       if (
-        selectedAnswers[index] === question.answer
+        isAnswerCorrect(
+          question,
+          selectedAnswer
+        )
       ) {
         totalScore++;
       }
@@ -184,17 +277,11 @@ function Quiz() {
     return (
       <div className="quiz-page">
         <div className="quiz-loading">
-
           <div className="loading-spinner"></div>
 
-          <h2>
-            Preparing your quiz...
-          </h2>
+          <h2>Preparing your quiz...</h2>
 
-          <p>
-            Getting your questions ready
-          </p>
-
+          <p>Getting your questions ready</p>
         </div>
       </div>
     );
@@ -208,28 +295,18 @@ function Quiz() {
     return (
       <div className="quiz-page">
         <div className="quiz-error">
+          <div className="error-icon">!</div>
 
-          <div className="error-icon">
-            !
-          </div>
+          <h2>Oops!</h2>
 
-          <h2>
-            Oops!
-          </h2>
-
-          <p>
-            {error}
-          </p>
+          <p>{error}</p>
 
           <button
             className="back-button"
-            onClick={() =>
-              navigate("/dashboard")
-            }
+            onClick={() => navigate("/dashboard")}
           >
             ← Back to Courses
           </button>
-
         </div>
       </div>
     );
@@ -243,25 +320,18 @@ function Quiz() {
     return (
       <div className="quiz-page">
         <div className="quiz-error">
-
-          <h2>
-            No Questions Found
-          </h2>
+          <h2>No Questions Found</h2>
 
           <p>
-            This course doesn't have any quiz
-            questions yet.
+            This course doesn't have any quiz questions yet.
           </p>
 
           <button
             className="back-button"
-            onClick={() =>
-              navigate("/dashboard")
-            }
+            onClick={() => navigate("/dashboard")}
           >
             ← Back to Courses
           </button>
-
         </div>
       </div>
     );
@@ -286,21 +356,16 @@ function Quiz() {
 
     return (
       <div className="quiz-page">
-
         <div className="quiz-container">
 
           <header className="quiz-header">
-
-            <div className="brand">
-              <span className="brand-icon">
-                L
-              </span>
-
-              <span>
-                LearnX
-              </span>
+            <div
+              className="brand"
+              onClick={() => navigate("/dashboard")}
+            >
+              <span className="brand-icon">L</span>
+              <span>LearnX</span>
             </div>
-
           </header>
 
           <div className="result-card">
@@ -317,60 +382,36 @@ function Quiz() {
               QUIZ COMPLETED
             </p>
 
-            <h1>
-              {message}
-            </h1>
+            <h1>{message}</h1>
 
             <p className="result-course">
               {courseName}
             </p>
 
             <div className="score-circle">
-
               <div>
-
-                <strong>
-                  {percentage}%
-                </strong>
-
-                <span>
-                  Score
-                </span>
-
+                <strong>{percentage}%</strong>
+                <span>Score</span>
               </div>
-
             </div>
 
             <div className="score-details">
 
               <div>
-                <strong>
-                  {score}
-                </strong>
-
-                <span>
-                  Correct
-                </span>
+                <strong>{score}</strong>
+                <span>Correct</span>
               </div>
 
               <div>
                 <strong>
                   {questions.length - score}
                 </strong>
-
-                <span>
-                  Incorrect
-                </span>
+                <span>Incorrect</span>
               </div>
 
               <div>
-                <strong>
-                  {questions.length}
-                </strong>
-
-                <span>
-                  Total
-                </span>
+                <strong>{questions.length}</strong>
+                <span>Total</span>
               </div>
 
             </div>
@@ -396,9 +437,7 @@ function Quiz() {
             </div>
 
           </div>
-
         </div>
-
       </div>
     );
   }
@@ -438,15 +477,11 @@ function Quiz() {
               navigate("/dashboard")
             }
           >
-
             <span className="brand-icon">
               L
             </span>
 
-            <span>
-              LearnX
-            </span>
-
+            <span>LearnX</span>
           </div>
 
           <button
@@ -470,9 +505,7 @@ function Quiz() {
               CURRENT COURSE
             </span>
 
-            <h1>
-              {courseName}
-            </h1>
+            <h1>{courseName}</h1>
 
           </div>
 
@@ -496,13 +529,9 @@ function Quiz() {
 
           <div className="progress-text">
 
-            <span>
-              Your Progress
-            </span>
+            <span>Your Progress</span>
 
-            <strong>
-              {progress}%
-            </strong>
+            <strong>{progress}%</strong>
 
           </div>
 
@@ -551,9 +580,7 @@ function Quiz() {
               (option, index) => {
 
                 const optionLetter =
-                  String.fromCharCode(
-                    65 + index
-                  );
+                  String.fromCharCode(65 + index);
 
                 const isSelected =
                   selectedAnswer === option;
@@ -561,6 +588,7 @@ function Quiz() {
                 return (
                   <button
                     key={index}
+                    type="button"
                     className={`option ${
                       isSelected
                         ? "selected"
@@ -580,9 +608,7 @@ function Quiz() {
                     </span>
 
                     <span className="option-check">
-                      {isSelected
-                        ? "✓"
-                        : ""}
+                      {isSelected ? "✓" : ""}
                     </span>
 
                   </button>
@@ -597,11 +623,10 @@ function Quiz() {
           <div className="quiz-navigation">
 
             <button
+              type="button"
               className="previous-btn"
               onClick={previousQuestion}
-              disabled={
-                currentQuestion === 0
-              }
+              disabled={currentQuestion === 0}
             >
               ← Previous
             </button>
@@ -610,6 +635,7 @@ function Quiz() {
             questions.length - 1 ? (
 
               <button
+                type="button"
                 className="submit-btn"
                 onClick={submitQuiz}
               >
@@ -619,6 +645,7 @@ function Quiz() {
             ) : (
 
               <button
+                type="button"
                 className="next-btn"
                 onClick={nextQuestion}
               >
@@ -639,6 +666,7 @@ function Quiz() {
 
             <button
               key={index}
+              type="button"
               className={`
                 question-dot
                 ${
@@ -647,7 +675,8 @@ function Quiz() {
                     : ""
                 }
                 ${
-                  selectedAnswers[index]
+                  selectedAnswers[index] !==
+                  undefined
                     ? "answered"
                     : ""
                 }
